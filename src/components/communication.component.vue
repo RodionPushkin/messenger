@@ -274,8 +274,8 @@ export default {
   width: 100vw;
   height: 100vh;
   position: fixed;
-  z-index: 998;
-  background: var(--black-color);
+  z-index: 9999;
+  background: var(--color-font);
 
   #selfvideo {
     border-radius: var(--border-radius);
@@ -334,7 +334,7 @@ export default {
     //width: calc(100vw - 96px);
     left: 50%;
     transform: translateX(-50%);
-    background: var(--bg-color);
+    background: var(--color-main);
     display: flex;
     gap: 24px;
     border-radius: 36px;
@@ -364,8 +364,8 @@ export default {
         color: #5f19d7;
       }
       &.complete {
-        background: var(--main-color);
-        color: var(--bg-color);
+        background: red;
+        color: var(--color-main);
         transition: 0.3s;
         transform: translateX(1px);
         @media screen and (min-width: 768px) {

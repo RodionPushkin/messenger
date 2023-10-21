@@ -12,21 +12,22 @@ class TokenService {
             refreshToken
         }
     }
-
     async save(userId, accessToken, refreshToken, deviceId, location) {
-        const tokenData = await db.query(`SELECT * FROM "token" WHERE "id_user" = ${userId} AND "device_id" = '${deviceId}'`).then(res => res.rows[0])
+        const tokenData = await db.query(`SELECT * FROM "user_schema"."token" WHERE "id_user" = ${userId} 
+        AND "device_id" = '${deviceId}'`).then(res => res.rows[0])
         let expires = Date.now() + 30 * 24 * 60 * 60 * 1000 // токен на 30 дней
         if (tokenData) {
             tokenData.refreshToken = refreshToken;
             tokenData.accessToken = accessToken;
-            await db.query(`UPDATE "token" SET "refresh_token" = '${refreshToken}', "access_token" = '${accessToken}', "expires" = to_timestamp(${expires} / 1000.0) WHERE "id" = ${tokenData.id}`)
+            await db.query(`UPDATE "user_schema"."token" SET "refresh_token" = '${refreshToken}', "access_token" = '${accessToken}',
+            "expires" = to_timestamp(${expires} / 1000.0) WHERE "id" = ${tokenData.id}`)
             delete tokenData.id
             return tokenData
         }
         this.clearTimedOutTokens()
-        return await db.query(`INSERT INTO "token" ("id_user","device_id","refresh_token","expires","location","access_token") VALUES (${userId},'${deviceId}','${refreshToken}',to_timestamp(${expires} / 1000.0),'${location}','${accessToken}') RETURNING "id_user","location"`)
+        return await db.query(`INSERT INTO "user_schema"."token" ("id_user","device_id","refresh_token","expires","location","access_token") 
+        VALUES (${userId},'${deviceId}','${refreshToken}',to_timestamp(${expires} / 1000.0),'${location}','${accessToken}') RETURNING "id_user","location"`)
     }
-
     async validate(accessToken, refreshToken, deviceId, location) {
         if (!accessToken) return false
         if (!refreshToken) return false
@@ -35,7 +36,8 @@ class TokenService {
         accessToken = await this.validateAccessToken(accessToken)
         refreshToken = await this.validateRefreshToken(refreshToken)
         if (accessToken && refreshToken) {
-            const TokenFromDB = await db.query(`SELECT "id_user","device_id","refresh_token","access_token","location" FROM "token" WHERE "device_id" = '${deviceId}' AND "id_user" = ${accessToken.id}`).then(res => res.rows[0])
+            const TokenFromDB = await db.query(`SELECT "id_user","device_id","refresh_token","access_token","location" FROM "user_schema"."token" 
+            WHERE "device_id" = '${deviceId}' AND "id_user" = ${accessToken.id}`).then(res => res.rows[0])
             if (!TokenFromDB) return false
             if (!bcrypt.compare(location, TokenFromDB.location)) return false
             const refreshTokenFromDB = await this.validateRefreshToken(TokenFromDB.refresh_token)
@@ -46,33 +48,28 @@ class TokenService {
         }
         return false
     }
-
     async validateAccessToken(token) {
         return jwt.verify(token, config.JWT_ACCESS_SECRET, (err, decode) => {
             if (err) return undefined
             return decode
         })
     }
-
     async validateRefreshToken(token) {
         return jwt.verify(token, config.JWT_REFRESH_SECRET, (err, decode) => {
             if (err) return undefined
             return decode
         })
     }
-
     async logout(refreshToken) {
         return this.removeToken(refreshToken)
     }
-
     async removeToken(refreshToken) {
         this.clearTimedOutTokens()
-        return await db.query(`DELETE FROM "token" WHERE "refresh_token" = '${refreshToken}' RETURNING "id"`).then(res => res.rows[0])
+        return await db.query(`DELETE FROM "user_schema"."token" WHERE "refresh_token" = '${refreshToken}' RETURNING "id"`).then(res => res.rows[0])
     }
-
     clearTimedOutTokens() {
-        db.query(`DELETE FROM "token" WHERE "expires" < to_timestamp(${Date.now()} / 1000.0)`)
+        db.query(`DELETE FROM "user_schema"."token" WHERE "expires" < to_timestamp(${Date.now()} / 1000.0)`)
     }
 }
-
 module.exports = new TokenService()
+

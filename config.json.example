@@ -1,9 +1,9 @@
 {
   "secret": "some_secret",
-  "email_user": "",
-  "email_pass": "",
+  "email_user": "emailservice@internet.ru",
+  "email_pass": "bstUVqDGgBU1UnFShLTQ",
   "email_port": 465,
-  "email_smtp": "",
+  "email_smtp": "smtp.mail.ru"
   "DOMAIN": "127.0.0.1",
   "DB_HOST": "localhost",
   "DB_DATABASE": "postgres",

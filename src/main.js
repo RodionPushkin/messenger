@@ -8,6 +8,8 @@ import config from "../config.json"
 import './clear.scss'
 import './theme.scss'
 import './style.scss'
+import mitt from 'mitt';
+const emitter = mitt();
 
 const app = createApp(App).mixin({
   data() {
@@ -24,4 +26,5 @@ app.config.globalProperties.$peer = new Peer(undefined, {
   path: config.PEER_PATH,
   token: localStorage.getItem('token')
 })
+app.config.globalProperties.$emitter = emitter;
 app.use(store).use(router).mount('#app')

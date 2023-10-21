@@ -4,26 +4,34 @@ export default createStore({
     state: {
         peerid: null,
         connections: [],
-        showCommunication: false,
-        isCalling: false,
-        connectTo: null,
+        smart_token: "",
+        user: undefined,
+        folder: [],
+        chat: [],
+        avatar: []
     },
     getters: {
         PEERID: state => {
             return state.peerid
         },
+        CHAT: state => {
+            return state.chat
+        },
+        FOLDER: state => {
+            return state.folder
+        },
+        AVATAR: state => {
+            return state.avatar
+        },
         CONNECTIONS: state => {
             return state.connections
         },
-        SHOWCOMMUNICATION: state => {
-            return state.showCommunication
+        SMARTTOKEN: state => {
+            return state.smart_token
         },
-        ISCALLING: state => {
-            return state.isCalling
-        },
-        CONNECTTO: state => {
-            return state.connectTo
-        },
+        USER: state => {
+            return state.user
+        }
     },
     mutations: {
         SET_PEER_ID: (state, payload) => {
@@ -32,14 +40,20 @@ export default createStore({
         SET_CONNECTIONS: (state, payload) => {
             state.connections = payload
         },
-        SET_SHOW_COMMUNICATION: (state, payload) => {
-            state.showCommunication = payload
+        SET_SMART_TOKEN: (state, payload) => {
+            state.smart_token = payload
         },
-        SET_IS_CALLING: (state, payload) => {
-            state.isCalling = payload
+        SET_USER: (state, payload) => {
+            state.user = payload
         },
-        SET_CONNECT_TO: (state, payload) => {
-            state.connectTo = payload
+        SET_CHAT: (state, payload) => {
+            state.chat = payload
+        },
+        SET_FOLDER: (state, payload) => {
+            state.folder = payload
+        },
+        SET_AVATAR: (state, payload) => {
+            state.avatar = payload
         },
     },
     actions: {
@@ -49,14 +63,20 @@ export default createStore({
         SET_CONNECTIONS: (context, payload) => {
             context.commit('SET_CONNECTIONS', payload);
         },
-        SET_SHOW_COMMUNICATION: (context, payload) => {
-            context.commit('SET_SHOW_COMMUNICATION', payload);
+        SET_SMART_TOKEN: (context, payload) => {
+            context.commit('SET_SMART_TOKEN', payload);
         },
-        SET_IS_CALLING: (context, payload) => {
-            context.commit('SET_IS_CALLING', payload);
+        SET_USER: (context, payload) => {
+            context.commit('SET_USER', payload);
         },
-        SET_CONNECT_TO: (context, payload) => {
-            context.commit('SET_CONNECT_TO', payload);
+        SET_CHAT: (context, payload) => {
+            context.commit('SET_CHAT', payload);
+        },
+        SET_FOLDER: (context, payload) => {
+            context.commit('SET_FOLDER', payload);
+        },
+        SET_AVATAR: (context, payload) => {
+            context.commit('SET_AVATAR', payload);
         },
     },
     modules: {}

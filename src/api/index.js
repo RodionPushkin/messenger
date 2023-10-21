@@ -32,10 +32,7 @@ class api {
     return await this.request('post', url, body, headers)
   }
 
-  async request(method, url, body, headers) {
-    if (!headers) {
-      headers = {}
-    }
+  async request(method, url, body, headers = {}) {
     if (localStorage.getItem('token')) {
       headers['Authorization'] = `Bearer ${localStorage.getItem('token')}`
     }
@@ -58,14 +55,11 @@ class api {
 
   async user_refresh() {
     if (localStorage.getItem('token')) {
-      this.$api.put('user/refresh').then((res) => {
+      this.put('user/refresh').then((res) => {
         if (res == 'logout') {
           throw "logout"
         } else {
           localStorage.setItem('token', res.access_token)
-          // this.$peer._options.token = localStorage.getItem('token')
-          // this.$peer.disconnect()
-          // this.$peer.reconnect()
         }
       }).catch(err => {
         console.log(err)
@@ -80,18 +74,25 @@ class api {
     this.delete('user')
     localStorage.removeItem('token')
     this.$router.push('/')
-    // this.$peer.destroy()
+    this.$peer.destroy()
   }
 
-  async user_login(email, password) {
-    this.$api.put('user', undefined, {email, password}).then(res => {
+  async user_signin(phone, password, code, token) {
+    const body = {
+      password,
+      code,
+      token
+    }
+    if (phone.replace(/\D/g, "").length == 11) {
+      body.phone = "+" + phone.replace(/\D/g, "")
+    } else {
+      body.email = phone
+    }
+    return this.put('user', undefined, body).then(res => {
       if (res.message) {
         console.log(res)
       } else if (res.access_token) {
         localStorage.setItem('token', res.access_token)
-        // this.$peer._options.token = localStorage.getItem('token')
-        // this.$peer.disconnect()
-        // this.$peer.reconnect()
         this.$router.push('/')
       }
     }).catch(err => {
@@ -99,15 +100,12 @@ class api {
     })
   }
 
-  async user_registration(email, password) {
-    this.$api.post('user', undefined, {email, password}).then(res => {
+  async user_signup(email, password, username, code, token, phone) {
+    return this.post('user', {}, {email, password, username, code, token, phone}).then(res => {
       if (res.message) {
         console.log(res)
       } else if (res.access_token) {
         localStorage.setItem('token', res.access_token)
-        // this.$peer._options.token = localStorage.getItem('token')
-        // this.$peer.disconnect()
-        // this.$peer.reconnect()
         this.$router.push('/')
       }
     }).catch(err => {
@@ -116,13 +114,14 @@ class api {
   }
 
   async user_self() {
-    await this.$api.get('user').then(res => {
+    return this.get('user').then(res => {
       return res
     }).catch(err => {
       console.log(err)
       if (err == "logout") {
         this.user_logout()
       }
+      return err
     })
   }
 }

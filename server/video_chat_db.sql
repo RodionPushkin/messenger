@@ -2,6 +2,9 @@ DROP SCHEMA IF EXISTS "user_schema","message_schema","data_schema" CASCADE;
 CREATE SCHEMA IF NOT EXISTS "user_schema";
 CREATE SCHEMA IF NOT EXISTS "message_schema";
 CREATE SCHEMA IF NOT EXISTS "data_schema";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 CREATE TABLE IF NOT EXISTS "message_schema"."chat"(
   	"id" BIGSERIAL NOT NULL PRIMARY KEY,
@@ -9,10 +12,19 @@ CREATE TABLE IF NOT EXISTS "message_schema"."chat"(
   	"title" CHARACTER VARYING(128),
 	"deleted_at" TIMESTAMP(3) WITHOUT TIME ZONE,
   	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
-); 
+);
+--|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+CREATE TABLE IF NOT EXISTS "user_schema"."phone_code"(
+  	"id" BIGSERIAL NOT NULL PRIMARY KEY,
+  	"phone" CHARACTER VARYING(16) NOT NULL,
+  	"code" CHARACTER(6) NOT NULL,
+  	"activated_at" TIMESTAMP(3) WITHOUT TIME ZONE,
+  	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
+);
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 CREATE TABLE IF NOT EXISTS "user_schema"."user"(
   	"id" BIGSERIAL NOT NULL PRIMARY KEY,
+  	"phone" CHARACTER VARYING(16),
   	"email" CHARACTER VARYING(255) NOT NULL,
   	"password" CHARACTER VARYING(60) NOT NULL,
   	"is_activated" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -23,6 +35,16 @@ CREATE TABLE IF NOT EXISTS "user_schema"."user"(
 	"deleted_at" TIMESTAMP(3) WITHOUT TIME ZONE,
   	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP,
   	"online_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
+);
+--|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+CREATE TABLE IF NOT EXISTS "user_schema"."chat_settings"(
+  	"id" BIGSERIAL NOT NULL PRIMARY KEY,
+  	"id_user" BIGINT NOT NULL REFERENCES "user_schema"."user"("id") ON DELETE CASCADE,
+	"chat" BIGINT REFERENCES "message_schema"."chat"("id") ON DELETE CASCADE,
+  	"notifications" BOOLEAN NOT NULL DEFAULT false,
+  	"is_blocked" BOOLEAN NOT NULL DEFAULT false,
+	"deleted_at" TIMESTAMP(3) WITHOUT TIME ZONE,
+  	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS "user_schema"."token"(
   	"id" BIGSERIAL NOT NULL PRIMARY KEY,
@@ -95,6 +117,19 @@ CREATE TABLE IF NOT EXISTS "message_schema"."viewed"(
   	"id_user" BIGINT NOT NULL REFERENCES "user_schema"."user"("id") ON DELETE CASCADE,
   	"id_message" BIGINT NOT NULL REFERENCES "message_schema"."message"("id") ON DELETE CASCADE,
   	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS "message_schema"."call"(
+  	"id" BIGSERIAL NOT NULL PRIMARY KEY,
+  	"id_chat" BIGINT NOT NULL REFERENCES "message_schema"."chat"("id") ON DELETE CASCADE,
+  	"id_executor" BIGINT NOT NULL REFERENCES "user_schema"."user"("id") ON DELETE CASCADE,
+	"link" CHARACTER VARYING (200),
+	"deleted_at" TIMESTAMP(3) WITHOUT TIME ZONE,
+  	"created_at" TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP(3)::TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS "message_schema"."call_connection"(
+  	"id" BIGSERIAL NOT NULL PRIMARY KEY,
+  	"id_call" BIGINT NOT NULL REFERENCES "message_schema"."call"("id") ON DELETE CASCADE,
+  	"id_connection" BIGINT NOT NULL REFERENCES "user_schema"."connection"("id") ON DELETE CASCADE
 );
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 CREATE TABLE IF NOT EXISTS "message_schema"."reaction"(
@@ -225,7 +260,7 @@ EXECUTE PROCEDURE before_insert_connection_function();
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- обновление онлайн, когда юзер подключился
 CREATE OR REPLACE TRIGGER before_update_connection
-BEFORE INSERT ON "user_schema"."connection"
+BEFORE UPDATE ON "user_schema"."connection"
 FOR EACH ROW
 EXECUTE PROCEDURE before_insert_connection_function();
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -264,6 +299,7 @@ RETURNS TABLE (
 	"title" CHARACTER VARYING(128),
 	"avatar" BIGINT,
 	"online" TIMESTAMP(3) WITHOUT TIME ZONE,
+	"last_message_from" BIGINT,
 	"last_message_created" TIMESTAMP(3) WITHOUT TIME ZONE,
 	"last_message_edited" TIMESTAMP(3) WITHOUT TIME ZONE,
 	"last_message_content" CHARACTER VARYING(8000)
@@ -276,16 +312,24 @@ IF id_folder IS NULL THEN
 	"chat"."title" AS "title",
 	"chat_avatar"."id_file" AS "avatar",
 	"user"."online_at" AS "online",
+	"last_message"."id_chat_from" AS "last_message_from",
 	"last_message"."created_at" AS "last_message_created",
 	"last_message"."edited_at" AS "last_message_edited",
 	"last_message"."content" AS "last_message_content"
 	FROM "message_schema"."chat" AS "chat"
 	INNER JOIN "user_schema"."user" AS "user" ON "chat"."id" = "user"."chat"
+	INNER JOIN (SELECT t1.*
+FROM view_messages_from_chat(id_user) t1
+LEFT JOIN view_messages_from_chat(id_user) t2
+    ON (t1.id_chat_from = t2.id_chat_from OR t1.id_chat_from = t2.id_chat_to)
+    AND (t1.id_chat_to = t2.id_chat_from OR t1.id_chat_to = t2.id_chat_to)
+    AND t1.created_at < t2.created_at
+WHERE t2.id_chat_from IS NULL AND t2.id_chat_to IS NULL) AS "last_message" 
+	ON "last_message"."id_chat_from" = "user"."chat" AND "last_message"."id_chat_to" = id_user
+	OR "last_message"."id_chat_to" = "user"."chat" AND "last_message"."id_chat_from" = id_user
 	LEFT JOIN "message_schema"."chat_folder" AS "chat_folder" ON "chat"."id" = "chat_folder"."id_chat" 
 	LEFT JOIN "message_schema"."chat_avatar" AS "chat_avatar" ON "chat_avatar"."id" = "user"."chat"
-	LEFT JOIN (SELECT * FROM view_messages_from_chat(id_user) LIMIT 1) AS "last_message" ON "last_message"."id_chat_from" = "user"."chat"
-	OR "last_message"."id_chat_to" = "user"."chat"
-	WHERE "chat"."deleted_at" IS NULL AND "user"."id" = id_user;
+	WHERE "chat"."deleted_at" IS NULL;
 ELSE
   RETURN QUERY SELECT
 	"chat"."id" AS "id",
@@ -293,16 +337,24 @@ ELSE
 	"chat"."title" AS "title",
 	"chat_avatar"."id_file" AS "avatar",
 	"user"."online_at" AS "online",
+	"last_message"."id_chat_from" AS "last_message_from",
 	"last_message"."created_at" AS "last_message_created",
 	"last_message"."edited_at" AS "last_message_edited",
 	"last_message"."content" AS "last_message_content"
 	FROM "message_schema"."chat" AS "chat"
 	INNER JOIN "user_schema"."user" AS "user" ON "chat"."id" = "user"."chat"
-	INNER JOIN "message_schema"."chat_folder" AS "chat_folder" ON "chat"."id" = "chat_folder"."id_chat" 
+	INNER JOIN (SELECT t1.*
+FROM view_messages_from_chat(id_user) t1
+LEFT JOIN view_messages_from_chat(id_user) t2
+    ON (t1.id_chat_from = t2.id_chat_from OR t1.id_chat_from = t2.id_chat_to)
+    AND (t1.id_chat_to = t2.id_chat_from OR t1.id_chat_to = t2.id_chat_to)
+    AND t1.created_at < t2.created_at
+WHERE t2.id_chat_from IS NULL AND t2.id_chat_to IS NULL) AS "last_message" 
+	ON "last_message"."id_chat_from" = "user"."chat" AND "last_message"."id_chat_to" = id_user
+	OR "last_message"."id_chat_to" = "user"."chat" AND "last_message"."id_chat_from" = id_user
+	LEFT JOIN "message_schema"."chat_folder" AS "chat_folder" ON "chat"."id" = "chat_folder"."id_chat" 
 	LEFT JOIN "message_schema"."chat_avatar" AS "chat_avatar" ON "chat_avatar"."id" = "user"."chat"
-	LEFT JOIN (SELECT * FROM view_messages_from_chat(id_user) LIMIT 1) AS "last_message" ON "last_message"."id_chat_from" = "user"."chat"
-	OR "last_message"."id_chat_to" = "user"."chat"
-	WHERE "chat"."deleted_at" IS NULL AND "user"."chat" = 1
+	WHERE "chat"."deleted_at" IS NULL
 	AND "chat_folder"."id_folder" = id_folder;
 END IF;
 END;
@@ -310,7 +362,7 @@ $$ LANGUAGE plpgsql;
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- данные о чате
 DROP FUNCTION IF EXISTS view_messages_from_chat;
-CREATE OR REPLACE FUNCTION view_messages_from_chat(id_chat BIGINT)
+CREATE OR REPLACE FUNCTION view_messages_from_chat(chat_id BIGINT)
 RETURNS TABLE (
 	"id" BIGINT,
 	"id_chat_from" BIGINT,
@@ -332,28 +384,49 @@ BEGIN
 	FROM "message_schema"."message" AS "message"
 	INNER JOIN "user_schema"."user" AS "user" ON 
 	"user"."chat" = "message"."id_chat_from" OR "user"."chat" = "message"."id_chat_to"
-	WHERE "message"."deleted_at" IS NULL AND 
-	("message"."id_chat_to" = "user"."chat" AND "message"."id_chat_from" = 2)
-	OR ("message"."id_chat_to" = 2 AND "message"."id_chat_from" = "user"."chat") 
+	WHERE "message"."deleted_at" IS NULL AND "message"."id_chat_to" = chat_id AND "message"."id_chat_from" = "user"."chat"
+	OR "message"."deleted_at" IS NULL AND "message"."id_chat_to" = "user"."chat" AND "message"."id_chat_from" = chat_id GROUP BY "message"."id"
 	ORDER BY "message"."created_at" DESC;
 END;
 $$ LANGUAGE plpgsql;
 --|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-INSERT INTO "user_schema"."user" ("email", "password", "activation_link", "username")
-SELECT
-    'email' || generate_series(1, 100) || '@example.com',
-    'password' || generate_series(1, 100),
-    'activation_link' || generate_series(1, 100),
-    'username' || generate_series(1, 100)
-FROM generate_series(1, 1);
+-- INSERT INTO "user_schema"."user" ("email", "password", "activation_link", "username")
+-- SELECT
+--     'email' || generate_series(1, 100) || '@example.com',
+--     'password' || generate_series(1, 100),
+--     'activation_link' || generate_series(1, 100),
+--     'username' || generate_series(1, 100)
+-- FROM generate_series(1, 1);
 
-INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (1,2,'привет');
-INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (2,1,'пока!');
-INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (1,2,'кай?');
+-- INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (1,2,'привет');
+-- INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (2,1,'пока!');
+-- INSERT INTO "message_schema"."message" ("id_chat_from", "id_chat_to","content") VALUES (1,3,'кай?');
 -- view reactions of message
 
-SELECT * FROM view_messages_from_chat(1);
-SELECT * FROM view_get_chats_by_folder(NULL,1);
+-- SELECT * FROM view_messages_from_chat(1);
+-- SELECT * FROM view_get_chats_by_folder(NULL,1);
+-- SELECT * FROM "user_schema"."phone_code";
+-- SELECT * FROM "user_schema"."user";
+-- SELECT * FROM "user_schema"."token";
+-- SELECT * FROM "user_schema"."connection";
+-- SELECT *
+-- FROM "user_schema"."phone_code"
+-- WHERE "phone" = '+79295608607'
+--   AND "code" = '102674'
+--   AND "created_at" >= NOW() - INTERVAL '10 minute'
 
+-- поиск с ошибками
+SELECT * FROM "user_schema"."user"
+WHERE levenshtein(soundex(username), soundex('radaon pushkin')) <= 2;
+-- поиск с ошибками
 
+SELECT * FROM "message_schema"."message"
+SELECT * FROM view_get_chats_by_folder(NULL,2) GROUP BY * ORDER BY "last_message_created" DESC
 
+SELECT * FROM "user_schema"."user" AS "U" INNER JOIN "message_schema"."chat" AS "C" 
+      ON "U"."chat" = "C"."id" WHERE "U"."username" = 'na' OR "C"."title" = 'na'
+	  
+	  
+SELECT "C".* FROM "user_schema"."user" AS "U" INNER JOIN "user_schema"."token" AS "T" 
+      ON "U"."id" = "T"."id_user" INNER JOIN "user_schema"."connection" AS "C" ON "C"."id_token" = "T"."id"
+ WHERE "C"."peer" IS NOT NULL AND "C"."peer" != '' AND "U"."id" = 1

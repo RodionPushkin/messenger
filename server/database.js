@@ -7,12 +7,10 @@ const client = new Client({
   password: String(config.DB_PASS),
   port: config.DB_PORT,
 });
-
 class DB {
   async query(text, params, callback) {
     return client.query(text, params, callback)
   }
-
   async checkConnection() {
     client.connect();
     await client.query('SELECT NOW()', (err, res) => {
@@ -25,5 +23,4 @@ class DB {
     })
   }
 }
-
 module.exports = new DB()

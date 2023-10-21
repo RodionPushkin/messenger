@@ -72,7 +72,15 @@ button, .button {
   font-weight: 600;
   transition: background 0.35s, color 0.2s;
   user-select: none;
-
+  &:disabled{
+    background: var(--color-accent-30);
+    @media screen and (min-width: 768px) {
+      &:hover {
+        background: var(--color-accent-30);
+        color: var(--color-main);
+      }
+    }
+  }
   &::-moz-focus-inner {
     padding: 0;
     border: 0;
@@ -135,13 +143,6 @@ html {
     flex-direction: column;
     justify-content: stretch;
     align-items: stretch;
-
-    > .container:first-child {
-      padding-top: 84px;
-      @media screen and (max-width: 768px) {
-        padding-top: 108px;
-      }
-    }
   }
 
   .footer {

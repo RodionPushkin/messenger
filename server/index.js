@@ -44,8 +44,8 @@ app.use(session({
   },
 }));
 app.use(cookieParser());
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
@@ -53,7 +53,6 @@ app.use(
   }),
 );
 require('./router')(app)
-
 app.use(errorMiddleware)
 let server;
 let peer
@@ -101,7 +100,6 @@ if (process.env.NODE_ENV == 'production') {
     secure: false,
     debug: true,
     allow_discovery: true,
-    proxied: true,
   });
 }
 app.use("/", peer);
